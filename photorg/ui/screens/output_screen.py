@@ -1,34 +1,29 @@
-﻿"""
+"""
 Output screen.
 
-Shows a scrollable file-tree preview of the generated folder structure.
+Shows a scrollable file-tree preview of a real folder structure,
+replacing the original mock-data approach.  Supports both drop-to-preview
+and programmatic refresh after an organise operation completes.
 """
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QFrame, QLabel, QTreeWidget, QTreeWidgetItem, QAbstractItemView
+from __future__ import annotations
+
+from pathlib import Path
+
+from PySide6.QtWidgets import (
+    QWidget, QHBoxLayout, QVBoxLayout, QFrame, QLabel,
+    QTreeWidget, QTreeWidgetItem, QAbstractItemView,
+)
 from PySide6.QtCore import Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor, QFont, QDesktopServices
+from PySide6.QtCore import QUrl
 
 from photorg.ui.theme import TEXT, MUTED, DIMMER, GREEN, SURFACE, BORDER
 from photorg.ui.widgets.drop_zone import DropZone
 
-
-MOCK_TREE = {
-    "Italy_Trip": {
-        "Day 01 - Rome": {
-            "Beach": {},
-            "Restaurant": {},
-            "IMG_0012.jpg": None,
-            "IMG_0015.jpg": None,
-        },
-        "Day 02 - Rome": {
-            "Museum": {},
-            "IMG_0034.jpg": None,
-        },
-        "Day 03 - Amalfi": {
-            "Beach": {},
-            "Park": {},
-        },
-    }
-}
+IMAGE_EXTENSIONS = frozenset({
+    ".jpg", ".jpeg", ".png", ".heic", ".heif",
+    ".webp", ".bmp", ".gif", ".tiff", ".tif",
+})
 
 
 class _FileTreePanel(QFrame):
@@ -37,6 +32,7 @@ class _FileTreePanel(QFrame):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("panel")
+        self._root_path: Path | None = None
         self._build()
 
     def _build(self) -> None:
@@ -47,7 +43,6 @@ class _FileTreePanel(QFrame):
         # Header
         hdr = QWidget()
         hdr.setFixedHeight(46)
-        hdr.setStyleSheet("background: transparent;")
         h = QHBoxLayout(hdr)
         h.setContentsMargins(16, 0, 16, 0)
 
@@ -56,11 +51,22 @@ class _FileTreePanel(QFrame):
         h.addWidget(t)
         h.addStretch()
 
-        badge = QLabel("  mock data  ")
-        badge.setStyleSheet(
-            f"color: {MUTED}; font-size: 9px; background: {SURFACE}; border-radius: 4px; padding: 2px;"
+        self._badge = QLabel("  drop a folder  ")
+        self._badge.setStyleSheet(
+            f"color: {MUTED}; font-size: 9px; background: {SURFACE};"
+            f" border-radius: 4px; padding: 2px;"
         )
-        h.addWidget(badge)
+        h.addWidget(self._badge)
+
+        self._open_btn = QLabel("  📂 open  ")
+        self._open_btn.setStyleSheet(
+            f"color: {GREEN}; font-size: 9px; background: {SURFACE};"
+            f" border-radius: 4px; padding: 2px; cursor: pointer;"
+        )
+        self._open_btn.setVisible(False)
+        self._open_btn.mousePressEvent = self._open_in_explorer
+        h.addWidget(self._open_btn)
+
         v.addWidget(hdr)
 
         sep = QFrame()
@@ -77,24 +83,64 @@ class _FileTreePanel(QFrame):
         self._tree.setStyleSheet("QTreeWidget { padding: 8px 6px; }")
         v.addWidget(self._tree)
 
-        self._fill(MOCK_TREE, self._tree.invisibleRootItem(), depth=0)
+        # Placeholder
+        self._placeholder = QLabel("Drop or browse an output folder to preview")
+        self._placeholder.setAlignment(self._placeholder.alignment())
+        self._placeholder.setStyleSheet(
+            f"color: {DIMMER}; font-size: 11px; padding: 40px;"
+        )
+        self._placeholder.setWordWrap(True)
+        v.addWidget(self._placeholder)
+
+    def load_from_path(self, root: Path) -> None:
+        """Scan a real directory and populate the tree."""
+        self._tree.clear()
+        if not root.exists() or not root.is_dir():
+            self._placeholder.setVisible(True)
+            self._tree.setVisible(False)
+            self._open_btn.setVisible(False)
+            self._badge.setText("  folder not found  ")
+            return
+
+        self._root_path = root
+        self._placeholder.setVisible(False)
+        self._tree.setVisible(True)
+        self._open_btn.setVisible(True)
+        self._badge.setText(f"  {root.name}  ")
+
+        self._fill_from_disk(root, self._tree.invisibleRootItem(), depth=0)
         self._tree.expandAll()
 
-    def _fill(self, data: dict, parent: QTreeWidgetItem, depth: int) -> None:
-        for name, children in data.items():
-            is_image = children is None
-            is_place = (not is_image) and (depth == 2)
+    def _fill_from_disk(
+        self, path: Path, parent: QTreeWidgetItem, depth: int,
+    ) -> None:
+        """Recursively populate tree items from the filesystem."""
+        try:
+            entries = sorted(
+                path.iterdir(),
+                key=lambda p: (p.is_file(), p.name.lower()),
+            )
+        except PermissionError:
+            return
+
+        for entry in entries:
+            if entry.name.startswith("."):
+                continue
+
+            is_image = entry.is_file() and entry.suffix.lower() in IMAGE_EXTENSIONS
+            is_subfolder = entry.is_dir()
 
             if is_image:
-                label = f"  \U0001f5bc  {name}"  # Frame icon
+                label = f"  🖼  {entry.name}"
                 color = MUTED
                 bold = False
-            elif is_place:
-                label = f"  \U0001f4c2  {name}"  # Open folder icon
+            elif is_subfolder and depth >= 1:
+                # Scene / place sub-folders
+                label = f"  📂  {entry.name}"
                 color = GREEN
                 bold = False
             else:
-                label = f"  \U0001f4c1  {name}"  # Closed folder icon
+                label = f"  📁  {entry.name}"
                 color = TEXT
                 bold = (depth == 0)
 
@@ -103,8 +149,13 @@ class _FileTreePanel(QFrame):
             if bold:
                 item.setFont(0, QFont("Segoe UI", 11, QFont.Bold))
 
-            if children:
-                self._fill(children, item, depth + 1)
+            if is_subfolder:
+                self._fill_from_disk(entry, item, depth + 1)
+
+    def _open_in_explorer(self, _event) -> None:
+        """Open the root folder in the system file manager."""
+        if self._root_path and self._root_path.exists():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._root_path)))
 
 
 class OutputScreen(QWidget):
@@ -118,12 +169,21 @@ class OutputScreen(QWidget):
         h.setContentsMargins(16, 16, 16, 16)
         h.setSpacing(12)
 
-        # Reuse DropZone for selecting the output root folder to scan
+        # Reuse DropZone for selecting the output root folder
         self.drop_zone = DropZone()
         self.drop_zone._title.setText("Drop output folder")
         self.drop_zone._sub.setText("to preview generated tree")
-        self.drop_zone.folder_dropped.connect(self.folder_selected.emit)
+        self.drop_zone.folder_dropped.connect(self._on_folder_dropped)
         h.addWidget(self.drop_zone, 5)
 
-        self.tree = _FileTreePanel()
-        h.addWidget(self.tree, 6)
+        self.tree_panel = _FileTreePanel()
+        h.addWidget(self.tree_panel, 6)
+
+    def _on_folder_dropped(self, path: str) -> None:
+        """Handle folder selection via drop or browse."""
+        self.folder_selected.emit(path)
+        self.tree_panel.load_from_path(Path(path))
+
+    def refresh(self, path: str) -> None:
+        """Refresh the tree view (called after organising)."""
+        self.tree_panel.load_from_path(Path(path))
