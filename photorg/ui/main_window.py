@@ -66,12 +66,14 @@ class MainWindow(QMainWindow):
         self._day_screen = DayScreen()
         self._day_screen.folder_selected.connect(self._on_folder_selected)
         self._day_screen.run_requested.connect(self._run_day_organizer)
+        self._day_screen.cancel_requested.connect(self.cancel_operation)
         self._stack.addWidget(self._day_screen)
 
         # AI Organizer
         self._ai_screen = AIScreen()
         self._ai_screen.folder_selected.connect(self._on_folder_selected)
         self._ai_screen.run_requested.connect(self._run_ai_organizer)
+        self._ai_screen.cancel_requested.connect(self.cancel_operation)
         self._stack.addWidget(self._ai_screen)
 
         # Output Preview

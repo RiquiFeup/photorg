@@ -1,19 +1,22 @@
 """
 Day Organizer screen.
 
-Combines the DropZone (left) with a configuration panel (right)
-for setting the output title, destination, copy/move mode, and
-triggering the organise action.
+Combines the DropZone (left) with a scrollable configuration panel
+(right) for setting the output title, destination, copy/move mode,
+and triggering the organise action.
+
+The config panel is wrapped in a ``QScrollArea`` so the "Organise"
+button is always reachable regardless of window size.
 """
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QFrame, QLabel,
-    QLineEdit, QPushButton, QComboBox,
+    QLineEdit, QPushButton, QComboBox, QScrollArea,
 )
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 
-from photorg.ui.theme import TEXT, MUTED, DIMMER, INPUT_BG, INPUT_BD, SURFACE
+from photorg.ui.theme import TEXT, MUTED, DIMMER, INPUT_BG, INPUT_BD, SURFACE, GREEN
 from photorg.ui.widgets.drop_zone import DropZone
 from photorg.ui.widgets.browse_row import make_browse_row
 
@@ -21,7 +24,8 @@ from photorg.ui.widgets.browse_row import make_browse_row
 class _DayConfigPanel(QFrame):
     """Right-side configuration panel for the Day Organizer."""
 
-    run_clicked = Signal(str, str, str)  # (title, destination, mode)
+    run_clicked = Signal(str, str, str)   # (title, destination, mode)
+    cancel_clicked = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -78,10 +82,24 @@ class _DayConfigPanel(QFrame):
         v.addWidget(self._mode_combo)
         v.addStretch()
 
+        # Action buttons
         self._run_btn = QPushButton("Organise by Day  →")
         self._run_btn.setObjectName("primary")
+        self._run_btn.setMinimumHeight(42)
         self._run_btn.clicked.connect(self._on_run)
         v.addWidget(self._run_btn)
+
+        v.addSpacing(6)
+
+        self._cancel_btn = QPushButton("Cancel")
+        self._cancel_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {MUTED}; border: 1px solid {INPUT_BD};"
+            f" border-radius: 8px; font-size: 11px; min-height: 34px; }}"
+            f"QPushButton:hover {{ color: #ff6b6b; border-color: #ff6b6b; }}"
+        )
+        self._cancel_btn.setVisible(False)
+        self._cancel_btn.clicked.connect(self.cancel_clicked.emit)
+        v.addWidget(self._cancel_btn)
 
     @property
     def selected_mode(self) -> str:
@@ -95,16 +113,18 @@ class _DayConfigPanel(QFrame):
         )
 
     def set_running(self, running: bool) -> None:
-        """Enable/disable the run button during processing."""
+        """Toggle UI between idle and processing states."""
         self._run_btn.setEnabled(not running)
         self._run_btn.setText("Processing…" if running else "Organise by Day  →")
+        self._cancel_btn.setVisible(running)
 
 
 class DayScreen(QWidget):
     """Day Organizer view."""
 
     folder_selected = Signal(str)
-    run_requested = Signal(str, str, str)  # (title, destination, mode)
+    run_requested = Signal(str, str, str)   # (title, destination, mode)
+    cancel_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -116,9 +136,17 @@ class DayScreen(QWidget):
         self.drop_zone.folder_dropped.connect(self.folder_selected.emit)
         h.addWidget(self.drop_zone, 5)
 
+        # Wrap config panel in a scroll area for small screens
         self.config = _DayConfigPanel()
         self.config.run_clicked.connect(self.run_requested.emit)
-        h.addWidget(self.config, 6)
+        self.config.cancel_clicked.connect(self.cancel_requested.emit)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(self.config)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        h.addWidget(scroll, 6)
 
     def set_running(self, running: bool) -> None:
         """Propagate running state to the config panel."""
