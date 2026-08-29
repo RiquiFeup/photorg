@@ -24,7 +24,11 @@ class TestAIOrganizerE2E:
         for name in ["beach1.jpg", "museum1.jpg", "beach2.jpg"]:
             Image.new("RGB", (1, 1)).save(src / name)
 
-        dates = [datetime(2024, 7, 1)] * 3
+        dates = [
+            datetime(2024, 7, 1, 10, 0, 0),
+            datetime(2024, 7, 1, 10, 5, 0),
+            datetime(2024, 7, 1, 10, 10, 0)
+        ]
         scenes = ["Beach", "Museum", "Beach"]
 
         mock_classifier = MagicMock()
