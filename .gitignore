@@ -20,11 +20,37 @@ Thumbs.db
 
 # Env
 .env
+# Virtual environments
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# PyInstaller
+*.spec
+
+# IDE
+.idea/
+.vscode/
+*.DS_Store
+Thumbs.db
+
+# Env
+.env
 
 # Test artifacts
 .pytest_cache/
 htmlcov/
 .coverage
 
-# Models cache
-models/
+# Testing and mock data
+real_data/
+run_test_real_data.py
+output_testing/
+output_testing_gps/
+scratch/
