@@ -1,4 +1,4 @@
-﻿"""
+"""
 DropZone widget.
 
 Accepts a folder via drag-and-drop or click-to-browse.
@@ -121,6 +121,7 @@ class DropZone(QFrame):
         urls = e.mimeData().urls()
         if urls:
             path = urls[0].toLocalFile()
-            self._load(path)
-            self.folder_dropped.emit(path)
+            if os.path.isdir(path):
+                self._load(path)
+                self.folder_dropped.emit(path)
         self.update()
