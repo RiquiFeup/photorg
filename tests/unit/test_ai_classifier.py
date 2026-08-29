@@ -100,8 +100,16 @@ class TestAIOrganiserPipeline:
         mock_classifier = MagicMock()
         mock_classifier.classify.side_effect = ["Beach", "Museum", "Beach"]
 
+        def mock_get_capture_date(path: Path) -> datetime:
+            dates = {
+                "a.jpg": datetime(2024, 7, 1, 10, 0, 0),
+                "b.jpg": datetime(2024, 7, 1, 10, 5, 0),
+                "c.jpg": datetime(2024, 7, 1, 10, 10, 0),
+            }
+            return dates[path.name]
+
         with patch("photorg.core.ai_classifier.get_capture_date",
-                    return_value=datetime(2024, 7, 1)), \
+                    side_effect=mock_get_capture_date), \
              patch("photorg.core.ai_classifier.SceneClassifier",
                     return_value=mock_classifier):
             org = AIOrganiser(src, dest, "Italy", ["beach", "museum"])
@@ -146,8 +154,15 @@ class TestAIOrganiserPipeline:
         mock_classifier.classify.return_value = "Beach"
         progress: list[tuple[int, int, str]] = []
 
+        def mock_get_capture_date2(path: Path) -> datetime:
+            dates = {
+                "a.jpg": datetime(2024, 7, 1, 10, 0, 0),
+                "b.jpg": datetime(2024, 7, 1, 10, 5, 0),
+            }
+            return dates[path.name]
+
         with patch("photorg.core.ai_classifier.get_capture_date",
-                    return_value=datetime(2024, 7, 1)), \
+                    side_effect=mock_get_capture_date2), \
              patch("photorg.core.ai_classifier.SceneClassifier",
                     return_value=mock_classifier):
             org = AIOrganiser(src, dest, "Trip", ["beach"])
@@ -175,3 +190,42 @@ class TestAIOrganiserPipeline:
 
         assert not imgs[0].exists()
         assert (dest / "Trip" / "Day 01" / "Beach" / "photo.jpg").exists()
+
+    def test_burst_optimization_groups_photos(self, tmp_path: Path) -> None:
+        """Photos within 60s should be treated as a burst and classified only once."""
+        src = tmp_path / "src"
+        src.mkdir()
+        from photorg.core.file_utils import find_images
+        _make_images(src, ["burst1.jpg", "burst2.jpg", "burst3.jpg", "later.jpg"])
+        dest = tmp_path / "out"
+        
+        mock_classifier = MagicMock()
+        # Only the first item of each burst should be classified
+        mock_classifier.classify.side_effect = ["Beach", "Museum"]
+
+        def mock_get_capture_date(path: Path) -> datetime:
+            dates = {
+                "burst1.jpg": datetime(2024, 7, 1, 10, 0, 0),
+                "burst2.jpg": datetime(2024, 7, 1, 10, 0, 5),   # +5s
+                "burst3.jpg": datetime(2024, 7, 1, 10, 0, 45),  # +40s from burst2
+                "later.jpg": datetime(2024, 7, 1, 10, 5, 0),    # +5m (new burst)
+            }
+            return dates[path.name]
+
+        with patch("photorg.core.ai_classifier.get_capture_date", side_effect=mock_get_capture_date), \
+             patch("photorg.core.ai_classifier.SceneClassifier", return_value=mock_classifier):
+            
+            org = AIOrganiser(src, dest, "Trip", ["beach", "museum"])
+            org.run()
+            
+        # The AI classifier should only be called twice (burst head, and later image)
+        assert mock_classifier.classify.call_count == 2
+        
+        # All burst photos should go to the same folder
+        beach_dir = dest / "Trip" / "Day 01" / "Beach"
+        museum_dir = dest / "Trip" / "Day 01" / "Museum"
+        
+        assert (beach_dir / "burst1.jpg").exists()
+        assert (beach_dir / "burst2.jpg").exists()
+        assert (beach_dir / "burst3.jpg").exists()
+        assert (museum_dir / "later.jpg").exists()
