@@ -1,17 +1,17 @@
 """
 AI Organizer screen.
 
-Combines the DropZone (left) with a configuration panel (right)
-for setting the output title, scene/place tags, destination,
+Combines the DropZone (left) with a scrollable configuration panel
+(right) for setting the output title, scene/place tags, destination,
 copy/move mode, and triggering the AI organise action.
 """
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QFrame, QLabel,
-    QLineEdit, QPushButton, QComboBox,
+    QLineEdit, QPushButton, QComboBox, QScrollArea,
 )
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 
 from photorg.ui.theme import TEXT, MUTED, INPUT_BG, INPUT_BD, SURFACE
 from photorg.ui.widgets.drop_zone import DropZone
@@ -23,6 +23,7 @@ class _AIConfigPanel(QFrame):
     """Right-side configuration panel for the AI Organizer."""
 
     run_clicked = Signal(str, list, str, str)  # (title, places, destination, mode)
+    cancel_clicked = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -80,8 +81,21 @@ class _AIConfigPanel(QFrame):
 
         self._run_btn = QPushButton("Organise with AI  →")
         self._run_btn.setObjectName("primary")
+        self._run_btn.setMinimumHeight(42)
         self._run_btn.clicked.connect(self._on_run)
         v.addWidget(self._run_btn)
+
+        v.addSpacing(6)
+
+        self._cancel_btn = QPushButton("Cancel")
+        self._cancel_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {MUTED}; border: 1px solid {INPUT_BD};"
+            f" border-radius: 8px; font-size: 11px; min-height: 34px; }}"
+            f"QPushButton:hover {{ color: #ff6b6b; border-color: #ff6b6b; }}"
+        )
+        self._cancel_btn.setVisible(False)
+        self._cancel_btn.clicked.connect(self.cancel_clicked.emit)
+        v.addWidget(self._cancel_btn)
 
     @property
     def selected_mode(self) -> str:
@@ -96,9 +110,10 @@ class _AIConfigPanel(QFrame):
         )
 
     def set_running(self, running: bool) -> None:
-        """Enable/disable the run button during processing."""
+        """Toggle UI between idle and processing states."""
         self._run_btn.setEnabled(not running)
         self._run_btn.setText("Processing…" if running else "Organise with AI  →")
+        self._cancel_btn.setVisible(running)
 
 
 class AIScreen(QWidget):
@@ -106,6 +121,7 @@ class AIScreen(QWidget):
 
     folder_selected = Signal(str)
     run_requested = Signal(str, list, str, str)  # (title, places, destination, mode)
+    cancel_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -119,7 +135,14 @@ class AIScreen(QWidget):
 
         self.config = _AIConfigPanel()
         self.config.run_clicked.connect(self.run_requested.emit)
-        h.addWidget(self.config, 6)
+        self.config.cancel_clicked.connect(self.cancel_requested.emit)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(self.config)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        h.addWidget(scroll, 6)
 
     def set_running(self, running: bool) -> None:
         """Propagate running state to the config panel."""
