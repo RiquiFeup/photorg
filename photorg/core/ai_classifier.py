@@ -95,7 +95,7 @@ class AIOrganiser:
         classifier = SceneClassifier()
 
         # Group by capture date
-        date_groups: dict[str, list[Path]] = defaultdict(list)
+        date_groups: dict[str, list[tuple[Path, datetime | None]]] = defaultdict(list)
         for item in media:
             if is_video(item):
                 from photorg.core.video_utils import get_video_date
@@ -103,7 +103,7 @@ class AIOrganiser:
             else:
                 dt = get_capture_date(item)
             key = dt.strftime("%Y-%m-%d") if dt else "Unknown Date"
-            date_groups[key].append(item)
+            date_groups[key].append((item, dt))
 
         valid_dates = sorted(d for d in date_groups if d != "Unknown Date")
         day_map = {d: f"Day {i:02d}" for i, d in enumerate(valid_dates, start=1)}
@@ -121,40 +121,79 @@ class AIOrganiser:
 
             day_label = day_map[date_str]
 
-            for item in items:
+            # Burst optimization: Group photos taken within 60 seconds of each other
+            items_with_dt = [i for i in items if i[1] is not None]
+            items_without_dt = [i for i in items if i[1] is None]
+
+            items_with_dt.sort(key=lambda x: x[1])
+
+            bursts: list[list[Path]] = []
+            current_burst: list[Path] = []
+            last_dt = None
+
+            for item, dt in items_with_dt:
+                if last_dt is None or (dt - last_dt).total_seconds() <= 60.0:
+                    current_burst.append(item)
+                else:
+                    bursts.append(current_burst)
+                    current_burst = [item]
+                last_dt = dt
+
+            if current_burst:
+                bursts.append(current_burst)
+
+            for item, _ in items_without_dt:
+                bursts.append([item])
+
+            for burst in bursts:
                 if self._cancel.is_set():
                     return
-
+                
+                head_item = burst[0]
+                
+                # Update progress for the burst head
                 current += 1
                 if self.on_progress:
-                    self.on_progress(current, total, f"Classifying {item.name}…")
+                    msg = f"Classifying {head_item.name}…"
+                    if len(burst) > 1:
+                        msg = f"Classifying burst of {len(burst)} items (starting with {head_item.name})…"
+                    self.on_progress(current, total, msg)
 
+                # Classify only the head item of the burst
                 scene = None
-                if not is_video(item):
+                if not is_video(head_item):
                     from photorg.core.exif import get_gps_coordinates
                     from photorg.core.geocoder import reverse_geocode
-                    gps = get_gps_coordinates(item)
+                    gps = get_gps_coordinates(head_item)
                     if gps:
                         if self.on_progress:
-                            self.on_progress(current, total, f"Geocoding {item.name}…")
+                            self.on_progress(current, total, f"Geocoding {head_item.name}…")
                         place_name = reverse_geocode(gps[0], gps[1])
                         if place_name:
                             scene = place_name.title()
 
                 if scene is None:
                     # Classify: extract frame for videos, open image for photos
-                    if is_video(item):
+                    if is_video(head_item):
                         from photorg.core.video_utils import extract_frame
-                        frame = extract_frame(item)
+                        frame = extract_frame(head_item)
                         if frame:
                             scene = classifier.classify_image(frame, self.places)
                         else:
                             scene = "Other"
                     else:
-                        scene = classifier.classify(item, self.places)
+                        scene = classifier.classify(head_item, self.places)
 
                 out_dir = root / day_label / scene
-                transfer(item, out_dir / item.name)
+                
+                # Apply the same scene to all items in the burst
+                transfer(head_item, out_dir / head_item.name)
+                
+                for tail_item in burst[1:]:
+                    if self._cancel.is_set():
+                        return
+                    current += 1
+                    transfer(tail_item, out_dir / tail_item.name)
 
         if self.on_complete:
             self.on_complete(total)
