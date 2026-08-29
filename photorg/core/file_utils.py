@@ -22,6 +22,17 @@ VALID_EXTENSIONS = frozenset({
     ".webp", ".bmp", ".gif", ".tiff", ".tif",
 })
 
+VIDEO_EXTENSIONS = frozenset({
+    ".mov", ".mp4", ".m4v", ".avi", ".mkv", ".wmv", ".webm",
+})
+
+MEDIA_EXTENSIONS = VALID_EXTENSIONS | VIDEO_EXTENSIONS
+
+
+def is_video(path: Path) -> bool:
+    """Return True if the file extension indicates a video."""
+    return path.suffix.lower() in VIDEO_EXTENSIONS
+
 
 def find_images(directory: Path) -> Iterator[Path]:
     """Yield all valid image files in *directory*, recursively.
@@ -33,6 +44,19 @@ def find_images(directory: Path) -> Iterator[Path]:
         return
     for file in directory.rglob("*"):
         if file.is_file() and file.suffix.lower() in VALID_EXTENSIONS:
+            yield file
+
+
+def find_media(directory: Path) -> Iterator[Path]:
+    """Yield all valid image *and* video files in *directory*, recursively.
+
+    Silently returns nothing if the path does not exist or is not
+    a directory.
+    """
+    if not directory.exists() or not directory.is_dir():
+        return
+    for file in directory.rglob("*"):
+        if file.is_file() and file.suffix.lower() in MEDIA_EXTENSIONS:
             yield file
 
 
