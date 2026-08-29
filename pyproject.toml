@@ -12,6 +12,9 @@ requires-python = ">=3.11"
 dependencies = [
     "PySide6>=6.8.0",
     "Pillow>=12.0.0",
+    "pillow-heif>=1.4.0",
+    "transformers>=4.40.0",
+    "torch>=2.0.0",
 ]
 
 [project.scripts]
@@ -19,6 +22,7 @@ photorg = "photorg.main:main"
 
 [project.optional-dependencies]
 build = ["pyinstaller>=6.0", "hatchling"]
+dev = ["pytest>=8.0", "pytest-cov>=5.0", "pytest-qt>=4.4"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["photorg"]
