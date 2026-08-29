@@ -1,9 +1,9 @@
 """
 Output screen.
 
-Shows a scrollable file-tree preview of a real folder structure,
-replacing the original mock-data approach.  Supports both drop-to-preview
-and programmatic refresh after an organise operation completes.
+Shows a scrollable file-tree preview of a real folder structure.
+Supports both drop-to-preview and programmatic refresh after an
+organise operation completes.
 """
 from __future__ import annotations
 
@@ -13,16 +13,16 @@ from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QFrame, QLabel,
     QTreeWidget, QTreeWidgetItem, QAbstractItemView,
 )
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal, QUrl
 from PySide6.QtGui import QColor, QFont, QDesktopServices
-from PySide6.QtCore import QUrl
 
 from photorg.ui.theme import TEXT, MUTED, DIMMER, GREEN, SURFACE, BORDER
 from photorg.ui.widgets.drop_zone import DropZone
 
-IMAGE_EXTENSIONS = frozenset({
+MEDIA_PREVIEW_EXTENSIONS = frozenset({
     ".jpg", ".jpeg", ".png", ".heic", ".heif",
     ".webp", ".bmp", ".gif", ".tiff", ".tif",
+    ".mov", ".mp4", ".m4v", ".avi", ".mkv",
 })
 
 
@@ -58,13 +58,13 @@ class _FileTreePanel(QFrame):
         )
         h.addWidget(self._badge)
 
-        self._open_btn = QLabel("  📂 open  ")
-        self._open_btn.setStyleSheet(
-            f"color: {GREEN}; font-size: 9px; background: {SURFACE};"
-            f" border-radius: 4px; padding: 2px; cursor: pointer;"
-        )
+        # Use QPushButton instead of QLabel + monkeypatch for proper click handling
+        from PySide6.QtWidgets import QPushButton
+        self._open_btn = QPushButton("📂 open")
+        self._open_btn.setObjectName("browse")
+        self._open_btn.setCursor(Qt.PointingHandCursor)
         self._open_btn.setVisible(False)
-        self._open_btn.mousePressEvent = self._open_in_explorer
+        self._open_btn.clicked.connect(self._open_in_explorer)
         h.addWidget(self._open_btn)
 
         v.addWidget(hdr)
@@ -85,7 +85,7 @@ class _FileTreePanel(QFrame):
 
         # Placeholder
         self._placeholder = QLabel("Drop or browse an output folder to preview")
-        self._placeholder.setAlignment(self._placeholder.alignment())
+        self._placeholder.setAlignment(Qt.AlignCenter)
         self._placeholder.setStyleSheet(
             f"color: {DIMMER}; font-size: 11px; padding: 40px;"
         )
@@ -127,15 +127,14 @@ class _FileTreePanel(QFrame):
             if entry.name.startswith("."):
                 continue
 
-            is_image = entry.is_file() and entry.suffix.lower() in IMAGE_EXTENSIONS
+            is_media = entry.is_file() and entry.suffix.lower() in MEDIA_PREVIEW_EXTENSIONS
             is_subfolder = entry.is_dir()
 
-            if is_image:
+            if is_media:
                 label = f"  🖼  {entry.name}"
                 color = MUTED
                 bold = False
             elif is_subfolder and depth >= 1:
-                # Scene / place sub-folders
                 label = f"  📂  {entry.name}"
                 color = GREEN
                 bold = False
@@ -152,7 +151,7 @@ class _FileTreePanel(QFrame):
             if is_subfolder:
                 self._fill_from_disk(entry, item, depth + 1)
 
-    def _open_in_explorer(self, _event) -> None:
+    def _open_in_explorer(self) -> None:
         """Open the root folder in the system file manager."""
         if self._root_path and self._root_path.exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._root_path)))
@@ -169,10 +168,8 @@ class OutputScreen(QWidget):
         h.setContentsMargins(16, 16, 16, 16)
         h.setSpacing(12)
 
-        # Reuse DropZone for selecting the output root folder
         self.drop_zone = DropZone()
-        self.drop_zone._title.setText("Drop output folder")
-        self.drop_zone._sub.setText("to preview generated tree")
+        self.drop_zone.set_labels("Drop output folder", "to preview generated tree")
         self.drop_zone.folder_dropped.connect(self._on_folder_dropped)
         h.addWidget(self.drop_zone, 5)
 
