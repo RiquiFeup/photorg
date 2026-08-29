@@ -67,14 +67,30 @@ class SceneClassifier:
             The best-matching label (title-cased), or ``"Other"`` if
             confidence is below the threshold for every label.
         """
+        image = Image.open(image_path).convert("RGB")
+        return self.classify_image(image, labels)
+
+    def classify_image(self, image: Image.Image, labels: list[str]) -> str:
+        """Classify a PIL Image against user-defined scene labels.
+
+        This is the core classification method.  :meth:`classify` is a
+        convenience wrapper that opens a file from disk first.
+
+        Args:
+            image: A PIL Image (already loaded into memory).
+            labels: Scene / place labels.
+
+        Returns:
+            The best-matching label (title-cased), or ``"Other"``.
+        """
         self._ensure_model()
         import torch
 
-        image = Image.open(image_path).convert("RGB")
+        rgb = image.convert("RGB")
         prompts = [f"a photo of a {label}" for label in labels]
 
         inputs = self._processor(
-            text=prompts, images=image, return_tensors="pt", padding=True,
+            text=prompts, images=rgb, return_tensors="pt", padding=True,
         )
         with torch.no_grad():
             outputs = self._model(**inputs)

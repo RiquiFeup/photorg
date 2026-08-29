@@ -17,7 +17,7 @@ from threading import Event
 from typing import Callable, Literal, Optional
 
 from photorg.core.exif import get_capture_date
-from photorg.core.file_utils import find_images, safe_copy, safe_move
+from photorg.core.file_utils import find_media, safe_copy, safe_move, is_video
 
 
 class DayOrganiser:
@@ -80,18 +80,22 @@ class DayOrganiser:
     # ── internal ────────────────────────────────────────────────────────
 
     def _process(self) -> None:
-        images = list(find_images(self.source))
-        if not images:
+        media = list(find_media(self.source))
+        if not media:
             if self.on_error:
-                self.on_error("No valid images found in the source folder.")
+                self.on_error("No valid images or videos found in the source folder.")
             return
 
         # Group by date string
         date_groups: dict[str, list[Path]] = defaultdict(list)
-        for img in images:
-            dt = get_capture_date(img)
+        for item in media:
+            if is_video(item):
+                from photorg.core.video_utils import get_video_date
+                dt = get_video_date(item)
+            else:
+                dt = get_capture_date(item)
             key = dt.strftime("%Y-%m-%d") if dt else "Unknown Date"
-            date_groups[key].append(img)
+            date_groups[key].append(item)
 
         # Assign sequential Day labels
         valid_dates = sorted(d for d in date_groups if d != "Unknown Date")
@@ -102,7 +106,7 @@ class DayOrganiser:
         root = self.destination / self.folder_title
         transfer = safe_move if self.mode == "move" else safe_copy
 
-        total = len(images)
+        total = len(media)
         current = 0
 
         for date_str, imgs in date_groups.items():
