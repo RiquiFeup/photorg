@@ -69,6 +69,11 @@ class DropZone(QFrame):
         self._sub.setText("Click to change")
         self.update()
 
+    def set_labels(self, title: str, subtitle: str) -> None:
+        """Set the title and subtitle labels (public API)."""
+        self._title.setText(title)
+        self._sub.setText(subtitle)
+
     @property
     def folder(self) -> str:
         return self._folder

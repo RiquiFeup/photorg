@@ -187,7 +187,7 @@ class MainWindow(QMainWindow):
         # Auto-switch to Output tab and refresh preview
         if self._last_destination:
             self._out_screen.refresh(self._last_destination)
-            self._topbar._switch(2)
+            self._topbar.switch_to(2)
             self._stack.setCurrentIndex(2)
 
     def _on_error(self, err: str) -> None:

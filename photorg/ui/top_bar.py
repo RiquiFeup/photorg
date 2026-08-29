@@ -1,4 +1,4 @@
-﻿"""
+"""
 TopBar widget.
 
 App header containing the logo and tab navigation.
@@ -52,6 +52,10 @@ class TopBar(QWidget):
             self._btns.append(btn)
 
         h.addStretch()
+
+    def switch_to(self, idx: int) -> None:
+        """Public API — switch to tab *idx*."""
+        self._switch(idx)
 
     def _switch(self, idx: int) -> None:
         if idx == self._active:
