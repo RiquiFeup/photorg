@@ -85,3 +85,58 @@ def _get_file_mtime(path: Path) -> Optional[datetime]:
         return datetime.fromtimestamp(mtime)
     except (OSError, ValueError):
         return None
+
+
+def get_gps_coordinates(image_path: Path) -> Optional[tuple[float, float]]:
+    """Extract GPS coordinates (latitude, longitude) from an image file.
+
+    Returns:
+        A tuple of (latitude, longitude) as floats, or ``None`` if GPS
+        data is missing or invalid.
+    """
+    try:
+        with Image.open(image_path) as img:
+            exif = img.getexif()
+            if not exif:
+                return None
+
+            gps_ifd = exif.get_ifd(IFD.GPSInfo)
+            if not gps_ifd:
+                return None
+
+            # 1: GPSLatitudeRef, 2: GPSLatitude, 3: GPSLongitudeRef, 4: GPSLongitude
+            lat_ref = gps_ifd.get(1)
+            lat_dms = gps_ifd.get(2)
+            lon_ref = gps_ifd.get(3)
+            lon_dms = gps_ifd.get(4)
+
+            if not all([lat_ref, lat_dms, lon_ref, lon_dms]):
+                return None
+
+            lat = _dms_to_decimal(lat_dms, lat_ref)
+            lon = _dms_to_decimal(lon_dms, lon_ref)
+
+            if lat is not None and lon is not None:
+                return (lat, lon)
+    except Exception:
+        pass
+
+    return None
+
+
+def _dms_to_decimal(dms: tuple, ref: str) -> Optional[float]:
+    """Convert degrees, minutes, seconds to decimal coordinates."""
+    try:
+        degrees = float(dms[0])
+        minutes = float(dms[1])
+        seconds = float(dms[2])
+
+        decimal = degrees + (minutes / 60.0) + (seconds / 3600.0)
+        
+        ref = str(ref).strip().upper()
+        if ref in ("S", "W"):
+            decimal = -decimal
+            
+        return decimal
+    except (IndexError, ValueError, TypeError):
+        return None

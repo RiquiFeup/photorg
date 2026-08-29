@@ -129,16 +129,29 @@ class AIOrganiser:
                 if self.on_progress:
                     self.on_progress(current, total, f"Classifying {item.name}…")
 
-                # Classify: extract frame for videos, open image for photos
-                if is_video(item):
-                    from photorg.core.video_utils import extract_frame
-                    frame = extract_frame(item)
-                    if frame:
-                        scene = classifier.classify_image(frame, self.places)
+                scene = None
+                if not is_video(item):
+                    from photorg.core.exif import get_gps_coordinates
+                    from photorg.core.geocoder import reverse_geocode
+                    gps = get_gps_coordinates(item)
+                    if gps:
+                        if self.on_progress:
+                            self.on_progress(current, total, f"Geocoding {item.name}…")
+                        place_name = reverse_geocode(gps[0], gps[1])
+                        if place_name:
+                            scene = place_name.title()
+
+                if scene is None:
+                    # Classify: extract frame for videos, open image for photos
+                    if is_video(item):
+                        from photorg.core.video_utils import extract_frame
+                        frame = extract_frame(item)
+                        if frame:
+                            scene = classifier.classify_image(frame, self.places)
+                        else:
+                            scene = "Other"
                     else:
-                        scene = "Other"
-                else:
-                    scene = classifier.classify(item, self.places)
+                        scene = classifier.classify(item, self.places)
 
                 out_dir = root / day_label / scene
                 transfer(item, out_dir / item.name)
