@@ -1,37 +1,59 @@
-﻿"""
-StatusBar widget.
 """
+StatusBar widget.
+
+Displays current app state, notifications, and progress.
+
+UI improvements
+---------------
+- Height increased to 40px for better readability.
+- Font size increased to 11px.
+- Progress bar is 180px wide (was 100px).
+- State-aware dot colour: green=ready/done, yellow=running, red=error.
+- set_state() public method for semantic state transitions.
+- Message label is width-capped so the version badge is never pushed off.
+"""
+from __future__ import annotations
+
+from typing import Literal
+
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QProgressBar
-from photorg.ui.theme import PANEL, GREEN, MUTED, DIMMER, SURFACE
+from photorg.ui.theme import PANEL, GREEN, MUTED, DIMMER, SURFACE, ERROR, WARNING
+
+
+_STATE_COLORS: dict[str, str] = {
+    "ready":   GREEN,
+    "running": WARNING,
+    "error":   ERROR,
+    "success": GREEN,
+}
+
 
 class StatusBar(QWidget):
     """Displays current app state, notifications, and progress."""
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setFixedHeight(28)
+        self.setFixedHeight(40)
         self.setStyleSheet(f"background-color: {PANEL};")
 
         h = QHBoxLayout(self)
         h.setContentsMargins(16, 0, 16, 0)
-        h.setSpacing(8)
+        h.setSpacing(10)
 
-        dot = QLabel("\u25cf  Ready")
-        dot.setStyleSheet(f"color: {GREEN}; font-size: 10px;")
-        h.addWidget(dot)
+        self._dot = QLabel("●")
+        self._dot.setStyleSheet(f"color: {GREEN}; font-size: 10px;")
+        h.addWidget(self._dot)
 
         self._msg = QLabel("No folder selected")
-        self._msg.setStyleSheet(f"color: {MUTED}; font-size: 10px;")
+        self._msg.setStyleSheet(f"color: {MUTED}; font-size: 11px;")
+        self._msg.setMaximumWidth(500)
         h.addWidget(self._msg)
 
         self._progress = QProgressBar()
-        self._progress.setFixedSize(100, 10)
+        self._progress.setFixedWidth(180)
         self._progress.setTextVisible(False)
         self._progress.setVisible(False)
-        self._progress.setStyleSheet(
-            f"QProgressBar {{ background: {SURFACE}; border-radius: 5px; border: none; }}"
-            f"QProgressBar::chunk {{ background: {GREEN}; border-radius: 5px; }}"
-        )
+        # Progress bar styled by global QSS (QProgressBar selector)
         h.addWidget(self._progress)
 
         h.addStretch()
@@ -41,8 +63,15 @@ class StatusBar(QWidget):
         ver.setStyleSheet(f"color: {DIMMER}; font-size: 9px;")
         h.addWidget(ver)
 
+    # ── Public API ────────────────────────────────────────────────────────
+
     def set_message(self, text: str) -> None:
         self._msg.setText(text)
+
+    def set_state(self, state: Literal["ready", "running", "error", "success"]) -> None:
+        """Change the status dot colour to reflect the app state."""
+        color = _STATE_COLORS.get(state, GREEN)
+        self._dot.setStyleSheet(f"color: {color}; font-size: 10px;")
 
     def show_progress(self, visible: bool) -> None:
         self._progress.setVisible(visible)
