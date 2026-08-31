@@ -34,9 +34,10 @@ def make_browse_row(label_text: str, placeholder: str) -> tuple[QWidget, QLineEd
     entry.setPlaceholderText(placeholder)
     h.addWidget(entry, 1)
 
-    btn = QPushButton("…")
+    btn = QPushButton("📁")
     btn.setObjectName("browse")
     btn.setFixedWidth(44)
+    btn.setToolTip("Choose folder")
     btn.clicked.connect(lambda: _pick_folder(entry))
     h.addWidget(btn)
 

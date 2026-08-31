@@ -275,7 +275,7 @@ def build_qss() -> str:
     /* ── Panels ──────────────────────────────────────────────────────────── */
     QFrame#panel {{
         background-color: {PANEL};
-        border: 1px solid {BORDER};
+        border: none;
         border-radius: 10px;
     }}
 

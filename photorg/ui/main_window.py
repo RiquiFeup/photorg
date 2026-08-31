@@ -44,9 +44,7 @@ class MainWindow(QMainWindow):
 
     def _build(self) -> None:
         root = QWidget()
-        root.setStyleSheet(
-            f"background-color: {BG}; border: 1px solid {BORDER};"
-        )
+        root.setStyleSheet(f"background-color: {BG};")
         self.setCentralWidget(root)
 
         v = QVBoxLayout(root)

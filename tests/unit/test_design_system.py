@@ -458,3 +458,71 @@ class TestBrowseRowFactory:
         widget, entry = make_browse_row("DEST", "my placeholder")
         qtbot.addWidget(widget)
         assert entry.placeholderText() == "my placeholder"
+
+    def test_browse_button_has_folder_icon(self, qtbot) -> None:
+        """Browse button must show a folder emoji, not '...' or '…'."""
+        from photorg.ui.widgets.browse_row import make_browse_row
+        from PySide6.QtWidgets import QPushButton
+        widget, _ = make_browse_row("DEST", "Choose…")
+        qtbot.addWidget(widget)
+        # Find the QPushButton#browse child
+        btn = widget.findChild(QPushButton, "browse")
+        assert btn is not None
+        assert "\U0001f4c1" in btn.text(), (
+            f"Browse button text should be '📁', got: {btn.text()!r}"
+        )
+
+    def test_browse_button_has_tooltip(self, qtbot) -> None:
+        """Browse button must have a tooltip for accessibility."""
+        from photorg.ui.widgets.browse_row import make_browse_row
+        from PySide6.QtWidgets import QPushButton
+        widget, _ = make_browse_row("DEST", "Choose…")
+        qtbot.addWidget(widget)
+        btn = widget.findChild(QPushButton, "browse")
+        assert btn is not None
+        assert btn.toolTip() != "", "Browse button must have a tooltip"
+
+
+# ── Border removal regression ────────────────────────────────────────────────
+
+
+class TestNoBordersRegression:
+    """Guard against reintroducing visible box borders on panels and window root."""
+
+    def test_panel_frame_has_no_border_in_qss(self) -> None:
+        """QFrame#panel must not have a border property in QSS.
+
+        Bug: A '1px solid BORDER' on the panel frame created a visible box
+        around every config panel. Removed — panels now rely on background
+        colour contrast only.
+        """
+        from photorg.ui.theme import build_qss
+        qss = build_qss()
+        # Extract just the QFrame#panel block (roughly)
+        panel_start = qss.find("QFrame#panel")
+        panel_end = qss.find("}", panel_start)
+        panel_block = qss[panel_start:panel_end]
+        assert "border: 1px solid" not in panel_block, (
+            "QFrame#panel must not have a visible 1px border. "
+            "Remove it from theme.py."
+        )
+
+    def test_main_window_root_has_no_border_in_source(self) -> None:
+        """MainWindow root widget must not set a border via inline stylesheet.
+
+        Bug: root.setStyleSheet('... border: 1px solid {BORDER};') wrapped
+        the entire frameless window in a visible box. Removed.
+        """
+        import inspect
+        from photorg.ui import main_window
+        source = inspect.getsource(main_window)
+        # The inline setStyleSheet on root must not contain 'border:'
+        # (find the specific line that was the problem)
+        bad = [
+            line.strip() for line in source.splitlines()
+            if "border:" in line and "root.setStyleSheet" in line
+        ]
+        assert bad == [], (
+            f"MainWindow root widget has inline border: {bad}. Remove it."
+        )
+
