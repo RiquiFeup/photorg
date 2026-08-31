@@ -1,13 +1,17 @@
-﻿"""
+"""
 BrowseRow factory.
 
 Creates a standard labelled input row with a '...' browse button.
 Returns the containing widget (to add to layout) and the QLineEdit
 (to read/write the selected path).
-"""
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFileDialog
 
-from photorg.ui.theme import MUTED
+Styling is handled entirely by the global QSS in theme.py via
+objectName selectors — no inline setStyleSheet() calls here.
+"""
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QLineEdit, QPushButton, QFileDialog,
+)
 
 
 def make_browse_row(label_text: str, placeholder: str) -> tuple[QWidget, QLineEdit]:
@@ -18,7 +22,7 @@ def make_browse_row(label_text: str, placeholder: str) -> tuple[QWidget, QLineEd
     v.setSpacing(4)
 
     lbl = QLabel(label_text)
-    lbl.setStyleSheet(f"color: {MUTED}; font-size: 10px;")
+    lbl.setObjectName("section_label")   # styled by global QSS
     v.addWidget(lbl)
 
     row = QWidget()
@@ -30,7 +34,7 @@ def make_browse_row(label_text: str, placeholder: str) -> tuple[QWidget, QLineEd
     entry.setPlaceholderText(placeholder)
     h.addWidget(entry, 1)
 
-    btn = QPushButton("...")
+    btn = QPushButton("…")
     btn.setObjectName("browse")
     btn.setFixedWidth(44)
     btn.clicked.connect(lambda: _pick_folder(entry))

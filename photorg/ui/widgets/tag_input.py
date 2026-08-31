@@ -1,19 +1,21 @@
 """
 TagInput widget.
 
-Manages a list of removable chips for defining categories.
+Manages a list of removable chips for defining AI scene categories.
+
+Layout
+------
+- Section header: green accent bar + "AI CATEGORIES" label
+- Wrapping chip box:  chips laid out with FlowLayout so they wrap to
+  new rows instead of clipping off-screen on narrow windows.
+- Below the box: a visible [+ Add] pill button and an inline text entry.
+- Helper hint text: "Type a place and press Enter or click + Add"
 
 Implementation note
 -------------------
-Earlier versions called ``deleteLater()`` on *every* widget returned
-by ``QHBoxLayout.takeAt()``, which inadvertently destroyed the
-persistent ``QLineEdit`` (``self._entry``).  When ``_render()`` later
-tried to re-add the deleted widget the Qt C++ side was already gone,
-producing ``RuntimeError: Internal C++ object … already deleted``.
-
-The fix is simple: **never delete ``self._entry``**.  We only delete
-the ephemeral ``TagChip`` widgets, then re-insert ``self._entry`` at
-the end.
+``self._entry`` is a *long-lived* widget created once and re-inserted
+into the layout on every ``_render()`` call — it is **never deleted**.
+Only the ephemeral ``TagChip`` widgets are destroyed and recreated.
 """
 from __future__ import annotations
 
@@ -23,7 +25,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
-from photorg.ui.theme import MUTED, GREEN, GREEN_DM, INPUT_BG, INPUT_BD, TEXT
+from photorg.ui.theme import GREEN
+from photorg.ui.widgets.flow_layout import FlowLayout
 
 
 class TagChip(QFrame):
@@ -33,27 +36,25 @@ class TagChip(QFrame):
 
     def __init__(self, text: str, parent=None) -> None:
         super().__init__(parent)
+        self.setObjectName("tag_chip")
         self.text = text
         self.setFixedHeight(26)
-        self.setStyleSheet(
-            f"QFrame {{ background-color: {GREEN_DM}; border-radius: 13px; border: none; }}"
-        )
+
         lay = QHBoxLayout(self)
         lay.setContentsMargins(10, 0, 6, 0)
-        lay.setSpacing(5)
+        lay.setSpacing(4)
 
         lbl = QLabel(text)
-        lbl.setStyleSheet(f"color: {GREEN}; font-size: 11px; background: transparent;")
+        # Inline color only — not a structural rule, safe to keep here
+        lbl.setStyleSheet(
+            f"color: {GREEN}; font-size: 11px; background: transparent;"
+        )
         lay.addWidget(lbl)
 
-        x = QPushButton("x")
-        x.setFixedSize(14, 14)
+        x = QPushButton("×")
+        x.setObjectName("chip_remove")   # picks up global QSS — no inline style
+        x.setFixedSize(16, 16)
         x.setCursor(Qt.PointingHandCursor)
-        x.setStyleSheet(
-            f"QPushButton {{ background: transparent; color: {GREEN}; border: none; "
-            "font-size: 9px; padding: 0; }}"
-            "QPushButton:hover { color: #ffffff; }"
-        )
         x.clicked.connect(lambda: self.removed.emit(self.text))
         lay.addWidget(x)
 
@@ -79,48 +80,80 @@ class TagInput(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(6)
 
-        lbl = QLabel("→  Places / scenes to scan")
-        lbl.setStyleSheet(f"color: {MUTED}; font-size: 10px;")
-        outer.addWidget(lbl)
+        # ── Section header ──────────────────────────────────────────────
+        header_row = QWidget()
+        hr = QHBoxLayout(header_row)
+        hr.setContentsMargins(0, 0, 0, 0)
+        hr.setSpacing(8)
 
-        self._box = QFrame()
-        self._box.setStyleSheet(
-            f"QFrame {{ background-color: {INPUT_BG}; border: 1px solid {INPUT_BD}; border-radius: 8px; }}"
+        accent = QFrame()
+        accent.setFixedSize(3, 14)
+        accent.setStyleSheet(
+            f"background: {GREEN}; border-radius: 1px; border: none;"
         )
-        self._box.setMinimumHeight(46)
+        hr.addWidget(accent)
+
+        lbl_header = QLabel("AI CATEGORIES")
+        lbl_header.setObjectName("section_label")
+        hr.addWidget(lbl_header)
+        hr.addStretch()
+        outer.addWidget(header_row)
+
+        # ── Wrapping chip box ────────────────────────────────────────────
+        self._box = QFrame()
+        self._box.setObjectName("tag_box")
+        self._box.setMinimumHeight(52)
         self._box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         outer.addWidget(self._box)
 
-        self._flow = QHBoxLayout(self._box)
+        self._flow = FlowLayout(self._box, h_spacing=6, v_spacing=5)
         self._flow.setContentsMargins(8, 8, 8, 8)
-        self._flow.setSpacing(6)
-        self._flow.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
-        # Persistent entry — created once, never destroyed
+        # ── Persistent entry — created once, never destroyed ─────────────
         self._entry = QLineEdit()
+        self._entry.setObjectName("tag_entry")   # global QSS handles style
         self._entry.setPlaceholderText("Add place…")
-        self._entry.setFixedWidth(100)
-        self._entry.setStyleSheet(
-            f"QLineEdit {{ background: transparent; border: none; color: {TEXT}; "
-            "font-size: 11px; min-height: 26px; max-height: 26px; padding: 0 4px; }}"
-        )
         self._entry.returnPressed.connect(self._add)
 
+        # ── Add button + entry row below the box ─────────────────────────
+        add_row = QWidget()
+        ar = QHBoxLayout(add_row)
+        ar.setContentsMargins(0, 0, 0, 0)
+        ar.setSpacing(8)
+
+        self._add_btn = QPushButton("+ Add")
+        self._add_btn.setObjectName("add_tag")   # global QSS handles style
+        self._add_btn.setCursor(Qt.PointingHandCursor)
+        self._add_btn.clicked.connect(self._add)
+        ar.addWidget(self._add_btn)
+
+        ar.addWidget(self._entry)
+
+        hint = QLabel("Type a place and press Enter")
+        hint.setObjectName("hint")
+        ar.addWidget(hint)
+        ar.addStretch()
+        outer.addWidget(add_row)
+
         self._render()
+
+    # ── Public API ───────────────────────────────────────────────────────
 
     @property
     def tags(self) -> list[str]:
         """Return a copy of the current tag list."""
         return list(self._tags)
 
+    # ── Rendering ────────────────────────────────────────────────────────
+
     def _render(self) -> None:
         """Rebuild the chip layout.
 
         Only ``TagChip`` instances are destroyed and recreated.
         ``self._entry`` is removed from the layout (not deleted) and
-        re-appended at the end.
+        is kept alive inside ``self`` until re-inserted.
         """
-        # 1. Remove the entry from layout (without deleting it)
+        # 1. Remove entry from flow (without deleting it)
         self._flow.removeWidget(self._entry)
         self._entry.setParent(None)
 
@@ -130,10 +163,9 @@ class TagInput(QWidget):
             chip.deleteLater()
         self._chips.clear()
 
-        # 3. Remove any leftover spacer items
+        # 3. Clear leftover layout items
         while self._flow.count():
-            item = self._flow.takeAt(0)
-            # No widget deletion here — all widgets already handled
+            self._flow.takeAt(0)
 
         # 4. Create fresh chips
         for tag in self._tags:
@@ -142,8 +174,13 @@ class TagInput(QWidget):
             self._flow.addWidget(chip)
             self._chips.append(chip)
 
-        # 5. Re-add the persistent entry at the end
+        # 5. Re-insert the persistent entry at end of flow
         self._flow.addWidget(self._entry)
+
+        # Force the box to recalculate its height based on flow content
+        self._box.updateGeometry()
+
+    # ── Mutations ────────────────────────────────────────────────────────
 
     def _add(self) -> None:
         """Add a new tag from the entry field."""
@@ -152,6 +189,7 @@ class TagInput(QWidget):
             self._tags.append(val)
             self._entry.clear()
             self._render()
+        self._entry.setFocus()
 
     def _remove(self, tag: str) -> None:
         """Remove a tag by name."""

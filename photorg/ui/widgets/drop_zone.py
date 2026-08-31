@@ -58,9 +58,9 @@ class DropZone(QFrame):
 
     def _load(self, path: str) -> None:
         self._folder = path
-        self._icon.setText("\U0001f4c1")
+        self._icon.setText("\u2193")
         self._icon.setStyleSheet(
-            f"color: {GREEN}; font-size: 28px; background: transparent;"
+            f"color: {GREEN}; font-size: 32px; background: transparent;"
         )
         self._title.setText(os.path.basename(path))
         self._title.setStyleSheet(
