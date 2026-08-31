@@ -46,7 +46,7 @@ def _apply_dark_title_bar(hwnd: int) -> None:
             ctypes.sizeof(value),
         )
     except Exception:
-        pass  # silently ignore — cosmetic only
+        pass  
 
 
 def main() -> None:

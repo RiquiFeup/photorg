@@ -5,13 +5,6 @@ Shows a scrollable file-tree preview of a real folder structure.
 Supports both drop-to-preview and programmatic refresh after an
 organise operation completes.
 
-UI improvements
----------------
-- Open-folder button uses #open_folder objectName (dedicated QSS rule).
-- File count badge uses #badge objectName.
-- Double-clicking a file in the tree opens it in the system default app.
-- Expand/Collapse All toggle button in the header.
-- File count shown in badge after loading.
 """
 from __future__ import annotations
 
@@ -50,7 +43,6 @@ class _FileTreePanel(QFrame):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
 
-        # ── Header ────────────────────────────────────────────────────────
         hdr = QWidget()
         hdr.setFixedHeight(50)
         h = QHBoxLayout(hdr)

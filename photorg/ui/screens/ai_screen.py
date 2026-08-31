@@ -5,17 +5,6 @@ Combines the DropZone (left) with a scrollable configuration panel
 (right) for setting the output title, scene/place tags, destination,
 copy/move mode, and triggering the AI organise action.
 
-UI improvements
----------------
-- Drop zone always visible regardless of window size.
-- All styling via global QSS objectName selectors — zero inline
-  setStyleSheet() calls, eliminating stylesheet parse errors.
-- Primary button: green background + white text.
-- Cancel button: always present in layout, disabled when idle.
-- "AI CATEGORIES" section has a prominent green accent header and a
-  visible [+ Add] pill button so users always know how to add places.
-- TagInput uses wrapping FlowLayout so chips never clip off-screen.
-- Section separators for visual grouping.
 """
 from __future__ import annotations
 
@@ -119,7 +108,6 @@ class _AIConfigPanel(QFrame):
         self._cancel_btn.clicked.connect(self.cancel_clicked.emit)
         v.addWidget(self._cancel_btn)
 
-    # ── Helpers ──────────────────────────────────────────────────────────
 
     @property
     def selected_mode(self) -> str:

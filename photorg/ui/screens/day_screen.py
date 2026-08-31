@@ -5,16 +5,6 @@ Combines the DropZone (left) with a scrollable configuration panel
 (right) for setting the output title, destination, copy/move mode,
 and triggering the organise action.
 
-UI improvements
----------------
-- Drop zone is always visible regardless of window size.
-- All styling via global QSS objectName selectors — zero inline
-  setStyleSheet() calls, eliminating stylesheet parse errors.
-- Primary button: green background + white text.
-- Cancel button: always present in layout, disabled when idle
-  (prevents layout shift when toggling running state).
-- Live path preview updates as the user types the folder title.
-- Thin separator lines between config sections for visual clarity.
 """
 from __future__ import annotations
 
