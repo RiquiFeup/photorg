@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Union
 
 from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QFrame, QStackedWidget
+from PySide6.QtCore import Qt
 
 from photorg.ui.theme import BG, BORDER
 from photorg.ui.top_bar import TopBar
@@ -27,9 +28,10 @@ class MainWindow(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setWindowTitle("Photorg")
         self.setMinimumSize(800, 500)
-        self.resize(960, 600)
+        self.resize(960, 620)
         self.setStatusBar(None)
 
         self._current_source: str | None = None
@@ -42,7 +44,9 @@ class MainWindow(QMainWindow):
 
     def _build(self) -> None:
         root = QWidget()
-        root.setStyleSheet(f"background-color: {BG};")
+        root.setStyleSheet(
+            f"background-color: {BG}; border: 1px solid {BORDER};"
+        )
         self.setCentralWidget(root)
 
         v = QVBoxLayout(root)
@@ -111,17 +115,20 @@ class MainWindow(QMainWindow):
 
     def _run_day_organizer(self, title: str, destination: str, mode: str) -> None:
         if self._is_busy():
-            self._status.set_message("⚠ An operation is already running.")
+            self._status.set_message("An operation is already running.")
             return
         if not self._current_source:
-            self._status.set_message("Error: Please drop a source folder first.")
+            self._status.set_message("Please drop a source folder first.")
+            self._status.set_state("error")
             return
         if not title or not destination:
-            self._status.set_message("Error: Please provide a title and destination.")
+            self._status.set_message("Please provide a title and destination.")
+            self._status.set_state("error")
             return
 
         self._last_destination = str(Path(destination) / title.strip())
         self._day_screen.set_running(True)
+        self.setWindowTitle("Photorg — Organising…")
 
         self._worker = DayOrganiserWorker(
             Path(self._current_source), Path(destination), title,
@@ -132,6 +139,7 @@ class MainWindow(QMainWindow):
         self._worker.error.connect(self._on_error)
 
         self._status.set_message(f"Starting Day Organizer ({mode} mode)…")
+        self._status.set_state("running")
         self._status.show_progress(True)
         self._worker.start()
 
@@ -139,20 +147,24 @@ class MainWindow(QMainWindow):
 
     def _run_ai_organizer(self, title: str, places: list, destination: str, mode: str) -> None:
         if self._is_busy():
-            self._status.set_message("⚠ An operation is already running.")
+            self._status.set_message("An operation is already running.")
             return
         if not self._current_source:
-            self._status.set_message("Error: Please drop a source folder first.")
+            self._status.set_message("Please drop a source folder first.")
+            self._status.set_state("error")
             return
         if not title or not destination:
-            self._status.set_message("Error: Please provide a title and destination.")
+            self._status.set_message("Please provide a title and destination.")
+            self._status.set_state("error")
             return
         if not places:
-            self._status.set_message("Error: Add at least one place tag.")
+            self._status.set_message("Add at least one place tag.")
+            self._status.set_state("error")
             return
 
         self._last_destination = str(Path(destination) / title.strip())
         self._ai_screen.set_running(True)
+        self.setWindowTitle("Photorg — AI Organising…")
 
         self._worker = AIOrganiserWorker(
             Path(self._current_source), Path(destination), title, places,
@@ -163,6 +175,7 @@ class MainWindow(QMainWindow):
         self._worker.error.connect(self._on_error)
 
         self._status.set_message("Starting AI Organizer… (loading model)")
+        self._status.set_state("running")
         self._status.show_progress(True)
         self._worker.start()
 
@@ -173,6 +186,8 @@ class MainWindow(QMainWindow):
         if self._worker and self._worker.isRunning():
             self._worker.cancel()
             self._status.set_message("Cancelling…")
+            self._status.set_state("ready")
+            self.setWindowTitle("Photorg")
 
     # ── worker callbacks ────────────────────────────────────────────────
 
@@ -181,10 +196,12 @@ class MainWindow(QMainWindow):
         self._status.set_progress(current, total)
 
     def _on_finished(self, total: int) -> None:
-        self._status.set_message(f"✓ Done — {total} photos organised!")
+        self._status.set_message(f"Done — {total} photos organised!")
+        self._status.set_state("success")
         self._status.show_progress(False)
         self._day_screen.set_running(False)
         self._ai_screen.set_running(False)
+        self.setWindowTitle("Photorg")
 
         # Auto-switch to Output tab and refresh preview
         if self._last_destination:
@@ -194,9 +211,11 @@ class MainWindow(QMainWindow):
 
     def _on_error(self, err: str) -> None:
         self._status.set_message(f"Error: {err}")
+        self._status.set_state("error")
         self._status.show_progress(False)
         self._day_screen.set_running(False)
         self._ai_screen.set_running(False)
+        self.setWindowTitle("Photorg")
 
     # ── cleanup ─────────────────────────────────────────────────────────
 
