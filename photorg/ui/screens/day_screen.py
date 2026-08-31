@@ -5,8 +5,16 @@ Combines the DropZone (left) with a scrollable configuration panel
 (right) for setting the output title, destination, copy/move mode,
 and triggering the organise action.
 
-The config panel is wrapped in a ``QScrollArea`` so the "Organise"
-button is always reachable regardless of window size.
+UI improvements
+---------------
+- Drop zone is always visible regardless of window size.
+- All styling via global QSS objectName selectors — zero inline
+  setStyleSheet() calls, eliminating stylesheet parse errors.
+- Primary button: green background + white text.
+- Cancel button: always present in layout, disabled when idle
+  (prevents layout shift when toggling running state).
+- Live path preview updates as the user types the folder title.
+- Thin separator lines between config sections for visual clarity.
 """
 from __future__ import annotations
 
@@ -16,15 +24,22 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
-from photorg.ui.theme import TEXT, MUTED, DIMMER, INPUT_BG, INPUT_BD, SURFACE, GREEN
 from photorg.ui.widgets.drop_zone import DropZone
 from photorg.ui.widgets.browse_row import make_browse_row
+
+
+def _h_sep() -> QFrame:
+    """Return a thin horizontal separator line."""
+    sep = QFrame()
+    sep.setObjectName("h_sep")
+    sep.setFrameShape(QFrame.HLine)
+    return sep
 
 
 class _DayConfigPanel(QFrame):
     """Right-side configuration panel for the Day Organizer."""
 
-    run_clicked = Signal(str, str, str)   # (title, destination, mode)
+    run_clicked    = Signal(str, str, str)  # (title, destination, mode)
     cancel_clicked = Signal()
 
     def __init__(self, parent=None) -> None:
@@ -37,69 +52,74 @@ class _DayConfigPanel(QFrame):
         v.setContentsMargins(28, 28, 28, 28)
         v.setSpacing(0)
 
+        # ── Panel title ──────────────────────────────────────────────────
         title = QLabel("Configuration")
-        title.setStyleSheet(f"color: {TEXT}; font-size: 13px; font-weight: 700;")
+        title.setObjectName("panel_title")
         v.addWidget(title)
-        v.addSpacing(22)
+        v.addSpacing(24)
 
-        lbl1 = QLabel("→  Folder title")
-        lbl1.setStyleSheet(f"color: {MUTED}; font-size: 10px;")
+        # ── Folder title ─────────────────────────────────────────────────
+        lbl1 = QLabel("FOLDER TITLE")
+        lbl1.setObjectName("section_label")
         v.addWidget(lbl1)
-        v.addSpacing(5)
+        v.addSpacing(6)
 
         self._title_entry = QLineEdit()
         self._title_entry.setPlaceholderText("e.g.  Italy Trip")
+        self._title_entry.textChanged.connect(self._update_preview)
         v.addWidget(self._title_entry)
-        v.addSpacing(6)
+        v.addSpacing(4)
 
-        suffix = QLabel("Output:   <title> / Day 01 / photo.jpg")
-        suffix.setStyleSheet(f"color: {DIMMER}; font-size: 9px;")
-        v.addWidget(suffix)
-        v.addSpacing(22)
+        self._preview_lbl = QLabel("📂  <title> / Day 01 / photo.jpg")
+        self._preview_lbl.setObjectName("preview_path")
+        v.addWidget(self._preview_lbl)
+        v.addSpacing(20)
 
+        v.addWidget(_h_sep())
+        v.addSpacing(20)
+
+        # ── Destination folder ────────────────────────────────────────────
         dest_row, self._dest_entry = make_browse_row(
-            "→  Destination folder", "Choose output location..."
+            "DESTINATION FOLDER", "Choose output location…"
         )
         v.addWidget(dest_row)
         v.addSpacing(20)
 
-        # Mode selector
-        lbl_mode = QLabel("→  File mode")
-        lbl_mode.setStyleSheet(f"color: {MUTED}; font-size: 10px;")
+        v.addWidget(_h_sep())
+        v.addSpacing(20)
+
+        # ── File mode ─────────────────────────────────────────────────────
+        lbl_mode = QLabel("FILE MODE")
+        lbl_mode.setObjectName("section_label")
         v.addWidget(lbl_mode)
-        v.addSpacing(5)
+        v.addSpacing(6)
 
         self._mode_combo = QComboBox()
-        self._mode_combo.addItems(["Copy (keep originals)", "Move (remove originals)"])
-        self._mode_combo.setStyleSheet(
-            f"QComboBox {{ background: {INPUT_BG}; border: 1px solid {INPUT_BD};"
-            f" border-radius: 6px; color: {TEXT}; padding: 6px 10px;"
-            f" min-height: 22px; font-size: 11px; }}"
-            f"QComboBox::drop-down {{ border: none; width: 24px; }}"
-            f"QComboBox QAbstractItemView {{ background: {SURFACE};"
-            f" color: {TEXT}; selection-background-color: {INPUT_BD}; }}"
-        )
+        self._mode_combo.addItems(["Copy  (keep originals)", "Move  (remove originals)"])
+        # No inline setStyleSheet — global QSS covers QComboBox
         v.addWidget(self._mode_combo)
         v.addStretch()
 
-        # Action buttons
-        self._run_btn = QPushButton("Organise by Day  →")
-        self._run_btn.setObjectName("primary")
-        self._run_btn.setMinimumHeight(42)
+        # ── Action buttons ────────────────────────────────────────────────
+        self._run_btn = QPushButton("Organise by Day")
+        self._run_btn.setObjectName("pill_primary")
+        self._run_btn.setMinimumHeight(44)
         self._run_btn.clicked.connect(self._on_run)
         v.addWidget(self._run_btn)
 
-        v.addSpacing(6)
+        v.addSpacing(8)
 
         self._cancel_btn = QPushButton("Cancel")
-        self._cancel_btn.setStyleSheet(
-            f"QPushButton {{ background: transparent; color: {MUTED}; border: 1px solid {INPUT_BD};"
-            f" border-radius: 8px; font-size: 11px; min-height: 34px; }}"
-            f"QPushButton:hover {{ color: #ff6b6b; border-color: #ff6b6b; }}"
-        )
-        self._cancel_btn.setVisible(False)
+        self._cancel_btn.setObjectName("cancel")
+        self._cancel_btn.setEnabled(False)          # disabled when idle
         self._cancel_btn.clicked.connect(self.cancel_clicked.emit)
         v.addWidget(self._cancel_btn)
+
+    # ── Helpers ──────────────────────────────────────────────────────────
+
+    def _update_preview(self, text: str) -> None:
+        label = text.strip() or "<title>"
+        self._preview_lbl.setText(f"{label} / Day 01 / photo.jpg")
 
     @property
     def selected_mode(self) -> str:
@@ -115,15 +135,15 @@ class _DayConfigPanel(QFrame):
     def set_running(self, running: bool) -> None:
         """Toggle UI between idle and processing states."""
         self._run_btn.setEnabled(not running)
-        self._run_btn.setText("Processing…" if running else "Organise by Day  →")
-        self._cancel_btn.setVisible(running)
+        self._run_btn.setText("Processing..." if running else "Organise by Day")
+        self._cancel_btn.setEnabled(running)
 
 
 class DayScreen(QWidget):
     """Day Organizer view."""
 
     folder_selected = Signal(str)
-    run_requested = Signal(str, str, str)   # (title, destination, mode)
+    run_requested   = Signal(str, str, str)   # (title, destination, mode)
     cancel_requested = Signal()
 
     def __init__(self, parent=None) -> None:
@@ -132,11 +152,12 @@ class DayScreen(QWidget):
         h.setContentsMargins(16, 16, 16, 16)
         h.setSpacing(12)
 
+        # Drop zone — always visible
         self.drop_zone = DropZone()
         self.drop_zone.folder_dropped.connect(self.folder_selected.emit)
         h.addWidget(self.drop_zone, 5)
 
-        # Wrap config panel in a scroll area for small screens
+        # Config panel wrapped in a scroll area for small screens
         self.config = _DayConfigPanel()
         self.config.run_clicked.connect(self.run_requested.emit)
         self.config.cancel_clicked.connect(self.cancel_requested.emit)
